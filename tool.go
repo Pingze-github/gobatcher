@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -21,42 +22,42 @@ func readFromResp(resp *http.Response) (string, error) {
 }
 
 // net/http/client 效率一般
-func request() {
+func request(cli *http.Client, uri string) {
 	// 复用client
-	resp, err := http.Get("http://127.0.0.1:9000/")
+	resp, err := cli.Get(uri)
 	if err != nil {
-		// Under heavy load with GOMAXPROCS>>1, it frequently fails
-		// with transient failures like:
-		// "dial tcp: cannot assign requested address"
-		// or:
-		// "ConnectEx tcp: Only one usage of each socket address
-		// (protocol/network address/port) is normally permitted".
-		// So we just log and continue,
-		// otherwise significant fraction of benchmarks will fail.
-		log.Printf("Get: %v", err)
-		return
+		panic(err)
 	}
 	defer resp.Body.Close()
-	// fmt.Println(resp.Status)
-	// body, _ := readFromResp(resp)
-	// fmt.Println(body)
+	if resp.StatusCode != 200 {
+		panic("return" + strconv.Itoa(resp.StatusCode))
+	}
 }
 
 func request2(cli *fasthttp.Client, uri string) {
 	req := &fasthttp.Request{}
 	req.SetRequestURI(uri)
 	resp := &fasthttp.Response{}
-	if err := cli.DoTimeout(req, resp, time.Second*10); err != nil {
+	//	stime := time.Now()
+	if err := cli.DoTimeout(req, resp, time.Second*30); err != nil {
 		panic(errors.New("[Fasthttp Error]" + err.Error()))
 	}
-	// log.Println(resp.StatusCode())
+	if resp.StatusCode() != 200 {
+		panic("return" + strconv.Itoa(resp.StatusCode()))
+	}
+	// dtime := time.Now().Sub(stime)
+	// log.Println(resp.StatusCode(), dtime)
 }
 
 func workRoutine(ch chan string, wg *sync.WaitGroup) {
-	cli := &fasthttp.Client{}
+	mode := 2
 	// cli.MaxConnsPerHost = 2048
 	for uri := range ch {
-		request2(cli, uri)
+		if mode == 1 {
+			request(&http.Client{}, uri)
+		} else {
+			request2(&fasthttp.Client{}, uri)
+		}
 	}
 	wg.Done()
 }
@@ -65,15 +66,16 @@ func workRoutine(ch chan string, wg *sync.WaitGroup) {
 // 分时统计
 // 参照jmeter
 func main() {
-	rnum := 2048
-	tnum := 409600
+	rnum := 128
+	tnum := 128000
 
-	divide := 8
+	divide := 1
 	rnum = rnum / divide
 	tnum = tnum / divide
 	log.Println("并发数", rnum)
 
-	url := "http://127.0.0.1:9005/"
+	url := "http://127.0.0.1:9001/"
+	// url := "https://im.qq.com/pcqq/"
 
 	ch := make(chan string)
 	var wg sync.WaitGroup

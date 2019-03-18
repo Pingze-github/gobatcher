@@ -59,3 +59,6 @@
 + golang使用fasthttp最强，达到45K+的吞吐量，同时资源消耗极小。
 + Nginx服务器的吞吐量很高，但并发数过高时，会产生错误`dialing to the given TCP address timed out`。
 + Nginx反向代理Golang服务时，总体性能会衰减许多。
+
+# TODO
+1. 实际ESTABLISHED数目，比apachebatch多一倍。为什么?
